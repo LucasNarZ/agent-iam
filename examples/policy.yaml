@@ -1,0 +1,6 @@
+allow:
+  - git.commit
+  - github.pr.create
+deny:
+  - git.push
+  - github.pr.merge
