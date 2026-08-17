@@ -5,6 +5,8 @@ allow:
   - git.remote 
   - git.config
   - git.symbolic-ref
+  - git.status
+  - github.pr.status
 deny:
   - git.push
   - github.pr.merge
