@@ -38,6 +38,9 @@ The first release intercepts `git` and `gh`:
 | Command | Capability |
 | --- | --- |
 | `git commit` | `git.commit` |
+| `git remote` | `git.remote` |
+| `git config` | `git.config` |
+| `git symbolic-ref` | `git.symbolic-ref` |
 | `git push` | `git.push` |
 | `gh pr create` | `github.pr.create` |
 | `gh pr view` | `github.pr.view` |
@@ -77,6 +80,9 @@ Agentiam reads only `~/.agentiam/policy.yaml` in the MVP. Create it with exact c
 ```yaml
 allow:
   - git.commit
+  - git.remote
+  - git.config
+  - git.symbolic-ref
   - github.pr.create
   - github.pr.view
 deny:

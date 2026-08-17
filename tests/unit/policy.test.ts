@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { normalizeGit } from "../../src/normalizers/git.js";
 import { normalizeGh } from "../../src/normalizers/gh.js";
 import { parsePolicy } from "../../src/policy/schema.js";
 import { compilePolicy, escapePrologAtom } from "../../src/policy/compiler.js";
@@ -50,5 +51,20 @@ describe("policy engine", () => {
 
     await expect(evaluatePolicy(policy, command.canonical))
       .resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
+  });
+
+  it("allows configured git commands in the example policy", async () => {
+    const source = await readFile(new URL("../../examples/policy.yaml", import.meta.url), "utf8");
+    const policy = parsePolicy(source);
+    const commands = [
+      normalizeGit(["remote", "-v"]),
+      normalizeGit(["config", "--get", "remote.origin.url"]),
+      normalizeGit(["symbolic-ref", "--short", "HEAD"]),
+    ];
+
+    for (const command of commands) {
+      await expect(evaluatePolicy(policy, command.canonical))
+        .resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
+    }
   });
 });

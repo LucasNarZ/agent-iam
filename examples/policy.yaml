@@ -2,6 +2,9 @@ allow:
   - git.commit
   - github.pr.create
   - github.pr.view
+  - git.remote 
+  - git.config
+  - git.symbolic-ref
 deny:
   - git.push
   - github.pr.merge
