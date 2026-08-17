@@ -1,6 +1,17 @@
 allow:
   - git.commit
   - github.pr.create
+  - github.pr.view
+  - git.remote 
+  - git.config
+  - git.symbolic-ref
+  - git.status
+  - github.pr.status
+  - git.log
+  - git.diff
+  - github.pr.checks
+  - git.rev-parse
+  - github.pr.diff
 deny:
   - git.push
   - github.pr.merge
