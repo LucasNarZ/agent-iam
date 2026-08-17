@@ -9,8 +9,9 @@ allow:
   - github.pr.status
   - git.log
   - git.diff
-  - github.checks
+  - github.pr.checks
   - git.rev-parse
+  - github.pr.diff
 deny:
   - git.push
   - github.pr.merge
