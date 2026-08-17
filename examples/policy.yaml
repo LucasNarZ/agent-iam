@@ -7,6 +7,10 @@ allow:
   - git.symbolic-ref
   - git.status
   - github.pr.status
+  - git.log
+  - git.diff
+  - github.checks
+  - git.rev-parse
 deny:
   - git.push
   - github.pr.merge
