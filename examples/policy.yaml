@@ -12,6 +12,8 @@ allow:
   - github.pr.checks
   - git.rev-parse
   - github.pr.diff
+  - github.pr.list
+  - github.repo.view
 deny:
   - git.push
   - github.pr.merge
