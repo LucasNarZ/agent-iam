@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { normalizeGh } from "../../src/normalizers/gh.js";
 import { parsePolicy } from "../../src/policy/schema.js";
 import { compilePolicy, escapePrologAtom } from "../../src/policy/compiler.js";
 import { buildDecisionGoal, evaluatePolicy } from "../../src/policy/engine.js";
@@ -39,5 +41,14 @@ describe("policy engine", () => {
       .resolves.toEqual({ decision: "DENY", reason: "matched deny rule" });
     await expect(evaluatePolicy({ allow: [], deny: [] }, "git.status"))
       .resolves.toEqual({ decision: "DENY", reason: "no matching allow rule" });
+  });
+
+  it("allows gh pr view in the example policy", async () => {
+    const source = await readFile(new URL("../../examples/policy.yaml", import.meta.url), "utf8");
+    const policy = parsePolicy(source);
+    const command = normalizeGh(["pr", "view", "42"]);
+
+    await expect(evaluatePolicy(policy, command.canonical))
+      .resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
   });
 });

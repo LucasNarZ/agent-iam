@@ -40,6 +40,7 @@ The first release intercepts `git` and `gh`:
 | `git commit` | `git.commit` |
 | `git push` | `git.push` |
 | `gh pr create` | `github.pr.create` |
+| `gh pr view` | `github.pr.view` |
 | `gh pr merge` | `github.pr.merge` |
 
 Unknown command structures are normalized deterministically and denied unless explicitly allowed.
@@ -77,6 +78,7 @@ Agentiam reads only `~/.agentiam/policy.yaml` in the MVP. Create it with exact c
 allow:
   - git.commit
   - github.pr.create
+  - github.pr.view
 deny:
   - git.push
   - github.pr.merge

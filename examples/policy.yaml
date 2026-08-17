@@ -1,6 +1,7 @@
 allow:
   - git.commit
   - github.pr.create
+  - github.pr.view
 deny:
   - git.push
   - github.pr.merge
