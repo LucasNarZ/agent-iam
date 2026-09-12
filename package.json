@@ -1,19 +1,42 @@
 {
-  "name": "agentiam",
+  "name": "@lucasnarz/agent-iam",
   "version": "0.1.0",
   "description": "Capability-based policy enforcement for agent CLI actions",
   "type": "module",
-  "bin": { "agentiam": "dist/index.js" },
-  "files": ["dist", "README.md", "LICENSE"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "agentiam": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["ai-agent", "authorization", "policy", "prolog", "security"],
+  "keywords": [
+    "ai-agent",
+    "authorization",
+    "policy",
+    "prolog",
+    "mcp",
+    "cli",
+    "security"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LucasNarZ/agent-iam.git"
+  },
   "dependencies": {
     "tau-prolog": "^0.3.4",
     "yaml": "^2.9.0"
