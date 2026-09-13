@@ -1,12 +1,12 @@
-# Agentiam
+# Agent IAM
 
-Agentiam is a small, fail-closed authorization layer for AI-agent command execution.
+Agent IAM provides fail-closed, capability-based policy enforcement for AI-agent CLI actions.
 
 The central idea is simple: interfaces change, capabilities do not. Whether an agent eventually uses a CLI, MCP, or HTTP adapter, an external action can be normalized into a canonical capability, evaluated by one policy engine, and written to one audit log.
 
 ## Why This Repository Exists
 
-Agents increasingly execute actions outside their own process. A command such as `git commit` or `gh pr merge` can change source history, publish work, or affect a remote repository. Agentiam provides a transparent interception point that makes those actions explicit and policy-controlled without requiring a separate Prolog installation or a syscall sandbox.
+Agents increasingly execute actions outside their own process. A command such as `git commit` or `gh pr merge` can change source history, publish work, or affect a remote repository. Agent IAM provides a transparent interception point that makes those actions explicit and policy-controlled without requiring a separate Prolog installation or a syscall sandbox.
 
 ## MVP Architecture
 
@@ -31,20 +31,22 @@ YAML policy -> embedded Tau Prolog
 
 The MVP supports POSIX systems such as Linux and macOS. It uses temporary executable wrappers and does not trace syscalls or provide physical sandboxing.
 
-## Supported Capabilities
+## Capability Normalization
 
-The first release intercepts `git` and `gh`:
+The first release intercepts `git` and `gh`. A Git subcommand maps to `git.<command>`, while a GitHub CLI group and command map to `github.<group>.<command>`.
 
-| Command | Capability |
-| --- | --- |
-| `git commit` | `git.commit` |
-| `git remote` | `git.remote` |
-| `git config` | `git.config` |
+Examples:
+
+| Command            | Capability         |
+| ------------------ | ------------------ |
+| `git commit`       | `git.commit`       |
+| `git remote`       | `git.remote`       |
+| `git config`       | `git.config`       |
 | `git symbolic-ref` | `git.symbolic-ref` |
-| `git push` | `git.push` |
-| `gh pr create` | `github.pr.create` |
-| `gh pr view` | `github.pr.view` |
-| `gh pr merge` | `github.pr.merge` |
+| `git push`         | `git.push`         |
+| `gh pr create`     | `github.pr.create` |
+| `gh pr view`       | `github.pr.view`   |
+| `gh pr merge`      | `github.pr.merge`  |
 
 Unknown command structures are normalized deterministically and denied unless explicitly allowed.
 
@@ -58,12 +60,14 @@ Tau Prolog runs embedded inside the Node.js process. No system Prolog installati
 
 ## Installation
 
-After publication, install globally or run directly with npx:
+Install the scoped package globally or run it directly with npx:
 
 ```bash
-npm install --global agentiam
-npx agentiam inspect
+npm install --global @lucasnarz/agent-iam
+npx @lucasnarz/agent-iam inspect
 ```
+
+The package installs the `agentiam` executable used in the examples below.
 
 For local development:
 
@@ -75,7 +79,7 @@ node dist/index.js inspect
 
 ## Policy
 
-Agentiam reads only `~/.agentiam/policy.yaml` in the MVP. Create it with exact canonical capabilities:
+Agent IAM reads only `~/.agentiam/policy.yaml` in the MVP. Create it with exact canonical capabilities:
 
 ```yaml
 allow:
@@ -123,7 +127,20 @@ Every authorization attempt is appended to `~/.agentiam/audit.jsonl`. If the aud
 Each line is a JSON object containing the timestamp, structured capability, decision, tool, original argument array, display command, policy path, and decision reason:
 
 ```json
-{"timestamp":"2026-08-15T12:00:00.000Z","capability":{"service":"git","action":"commit","canonical":"git.commit"},"decision":"ALLOW","tool":"git","arguments":["commit","-m","fix"],"command":"git commit -m fix","policyPath":"/home/user/.agentiam/policy.yaml","reason":"matched allow rule"}
+{
+    "timestamp": "2026-08-15T12:00:00.000Z",
+    "capability": {
+        "service": "git",
+        "action": "commit",
+        "canonical": "git.commit"
+    },
+    "decision": "ALLOW",
+    "tool": "git",
+    "arguments": ["commit", "-m", "fix"],
+    "command": "git commit -m fix",
+    "policyPath": "/home/user/.agentiam/policy.yaml",
+    "reason": "matched allow rule"
+}
 ```
 
 ## Security Properties and Boundaries
@@ -135,18 +152,19 @@ Each line is a JSON object containing the timestamp, structured capability, deci
 - Real binaries are resolved only from the original `PATH`, preventing wrapper recursion.
 - Arguments are passed as an array and are not reconstructed through a shell.
 
-Agentiam is an authorization shim, not a complete sandbox. An agent can still perform actions not covered by `git` or `gh`, and a process can bypass the shim by deliberately changing its environment or invoking another tool. MCP and HTTP adapters, approval prompts, quotas, skill scopes, policy editing, a central control plane, physical sandboxing, and native Windows support are outside this MVP.
+Agent IAM is an authorization shim, not a complete sandbox. An agent can still perform actions not covered by `git` or `gh`, and a process can bypass the shim by deliberately changing its environment or invoking another tool. MCP and HTTP adapters, approval prompts, quotas, skill scopes, policy editing, a central control plane, physical sandboxing, and native Windows support are outside this MVP.
 
 ## Development
 
 ```bash
 npm install
+npm run format:check
 npm run typecheck
 npm test
 npm run build
 ```
 
-The source is organized around normalization, policy compilation/evaluation, auditing, interception, and process launching. Tests use temporary homes and fake binaries so they do not modify a developer's real Agentiam configuration.
+The source is organized around normalization, policy compilation/evaluation, auditing, interception, and process launching. Tests use temporary homes and fake binaries so they do not modify a developer's real Agent IAM configuration.
 
 ## License
 
