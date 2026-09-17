@@ -1,37 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { normalizeGit } from "../../src/normalizers/git.js";
-import { normalizeGh } from "../../src/normalizers/gh.js";
+import { GitCliAdapter } from "../../src/adapters/git.js";
+import { GithubCliAdapter } from "../../src/adapters/gh.js";
 
-describe("command normalizers", () => {
+describe("command adapters", () => {
     it("normalizes git commands", () => {
-        expect(normalizeGit(["commit", "-m", "fix"]).canonical).toBe(
+        const gitAdapter = new GitCliAdapter();
+        expect(gitAdapter.normalize(["commit", "-m", "fix"]).canonical).toBe(
             "git.commit",
         );
-        expect(normalizeGit(["remote", "-v"]).canonical).toBe("git.remote");
+        expect(gitAdapter.normalize(["remote", "-v"]).canonical).toBe(
+            "git.remote",
+        );
         expect(
-            normalizeGit(["config", "--get", "remote.origin.url"]).canonical,
+            gitAdapter.normalize(["config", "--get", "remote.origin.url"])
+                .canonical,
         ).toBe("git.config");
         expect(
-            normalizeGit(["symbolic-ref", "--short", "HEAD"]).canonical,
+            gitAdapter.normalize(["symbolic-ref", "--short", "HEAD"]).canonical,
         ).toBe("git.symbolic-ref");
         expect(
-            normalizeGit(["-C", "/repo", "push", "origin", "main"]).canonical,
+            gitAdapter.normalize(["-C", "/repo", "push", "origin", "main"])
+                .canonical,
         ).toBe("git.push");
-        expect(normalizeGit(["--git-dir=/repo/.git", "status"]).canonical).toBe(
-            "git.status",
-        );
-        expect(normalizeGit(["-C"]).canonical).toBe("git.unknown");
+        expect(
+            gitAdapter.normalize(["--git-dir=/repo/.git", "status"]).canonical,
+        ).toBe("git.status");
+        expect(gitAdapter.normalize(["-C"]).canonical).toBe("git.unknown");
     });
 
     it("normalizes gh commands", () => {
-        expect(normalizeGh(["pr", "create", "--fill"]).canonical).toBe(
+        const ghAdapter = new GithubCliAdapter();
+        expect(ghAdapter.normalize(["pr", "create", "--fill"]).canonical).toBe(
             "github.pr.create",
         );
         expect(
-            normalizeGh(["--repo", "owner/repo", "pr", "merge", "42"])
+            ghAdapter.normalize(["--repo", "owner/repo", "pr", "merge", "42"])
                 .canonical,
         ).toBe("github.pr.merge");
-        expect(normalizeGh(["auth"]).canonical).toBe("github.auth");
-        expect(normalizeGh([]).canonical).toBe("github.unknown");
+        expect(ghAdapter.normalize(["auth"]).canonical).toBe("github.auth");
+        expect(ghAdapter.normalize([]).canonical).toBe("github.unknown");
     });
 });

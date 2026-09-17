@@ -1,9 +1,11 @@
-import { normalizeGit } from "./normalizers/git.js";
-import { normalizeGh } from "./normalizers/gh.js";
+import { normalizeGit } from "./adapters/git.js";
+import { normalizeGh } from "./adapters/gh.js";
 import { resolvePolicyPath, loadPolicy } from "./policy/schema.js";
 import { evaluatePolicy } from "./policy/engine.js";
 import { appendAuditRecord, renderCommand } from "./audit.js";
 import { resolveExecutable, spawnInherited } from "./process.js";
+import { adapters } from "./adapters/index.js";
+import { AdapterNotFoundError } from "./exceptions.js";
 
 export interface ShimOptions {
     tool: "git" | "gh";
@@ -21,10 +23,14 @@ function write(
 }
 
 export async function runShim(options: ShimOptions): Promise<number> {
-    const capability =
-        options.tool === "git"
-            ? normalizeGit(options.args)
-            : normalizeGh(options.args);
+    const capability = await adapters[options.tool + "cli"]?.normalize(
+        options.args,
+    );
+
+    if (!capability) {
+        throw new AdapterNotFoundError(options.tool);
+    }
+
     const policyPath = resolvePolicyPath(options.env);
     let decision: "ALLOW" | "DENY" = "DENY";
     let reason = "policy evaluation failed";
