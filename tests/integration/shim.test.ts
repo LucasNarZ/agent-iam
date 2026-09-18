@@ -15,9 +15,80 @@ async function fakeTool(directory: string, tool: string): Promise<string> {
 }
 
 describe("command shim", () => {
+    it("applies a parent directory policy as an additional restriction", async () => {
+        const home = await mkdtemp(join(tmpdir(), "agentiam-shim-home-"));
+        const bin = await mkdtemp(join(tmpdir(), "agentiam-shim-bin-"));
+        const project = await mkdtemp(join(tmpdir(), "agentiam-project-"));
+        const nested = join(project, "packages", "app");
+        const output = join(home, "args.txt");
+        await fakeTool(bin, "git");
+        await mkdir(join(home, ".agentiam"));
+        await mkdir(join(project, ".agentiam"));
+        await mkdir(nested, { recursive: true });
+        await writeFile(
+            join(home, ".agentiam", "policy.yaml"),
+            "allow:\n  git.commit: true\n",
+        );
+        await writeFile(
+            join(project, ".agentiam", "policy.yaml"),
+            "deny:\n  git.commit: true\n",
+        );
+
+        const code = await runShim({
+            tool: "git",
+            args: ["commit", "-m", "message"],
+            env: {
+                HOME: home,
+                PATH: bin,
+                AGENTIAM_ORIGINAL_PATH: bin,
+                AGENTIAM_TEST_OUTPUT: output,
+            },
+            cwd: nested,
+        });
+
+        expect(code).toBe(126);
+        expect(await readFile(output, "utf8")).toBe(
+            "diff\n--cached\n--name-only\n-z\n",
+        );
+    });
+
+    it("does not let a directory policy override a global deny", async () => {
+        const home = await mkdtemp(join(tmpdir(), "agentiam-shim-home-"));
+        const bin = await mkdtemp(join(tmpdir(), "agentiam-shim-bin-"));
+        const project = await mkdtemp(join(tmpdir(), "agentiam-project-"));
+        const output = join(home, "args.txt");
+        await fakeTool(bin, "gh");
+        await mkdir(join(home, ".agentiam"));
+        await mkdir(join(project, ".agentiam"));
+        await writeFile(
+            join(home, ".agentiam", "policy.yaml"),
+            "deny:\n  github.pr.merge: true\n",
+        );
+        await writeFile(
+            join(project, ".agentiam", "policy.yaml"),
+            "allow:\n  github.pr.merge: true\n",
+        );
+
+        const code = await runShim({
+            tool: "gh",
+            args: ["pr", "merge", "42"],
+            env: {
+                HOME: home,
+                PATH: bin,
+                AGENTIAM_ORIGINAL_PATH: bin,
+                AGENTIAM_TEST_OUTPUT: output,
+            },
+            cwd: project,
+        });
+
+        expect(code).toBe(126);
+        await expect(readFile(output, "utf8")).rejects.toThrow();
+    });
+
     it("allows and executes the real binary with unchanged arguments", async () => {
         const home = await mkdtemp(join(tmpdir(), "agentiam-shim-home-"));
         const bin = await mkdtemp(join(tmpdir(), "agentiam-shim-bin-"));
+        const cwd = await mkdtemp(join(tmpdir(), "agentiam-shim-cwd-"));
         const output = join(home, "args.txt");
         await fakeTool(bin, "git");
         await mkdir(join(home, ".agentiam"));
@@ -34,6 +105,7 @@ describe("command shim", () => {
                 AGENTIAM_ORIGINAL_PATH: bin,
                 AGENTIAM_TEST_OUTPUT: output,
             },
+            cwd,
         });
         expect(code).toBe(7);
         expect(await readFile(output, "utf8")).toBe(
@@ -44,6 +116,7 @@ describe("command shim", () => {
     it("denies without executing the real binary", async () => {
         const home = await mkdtemp(join(tmpdir(), "agentiam-shim-home-"));
         const bin = await mkdtemp(join(tmpdir(), "agentiam-shim-bin-"));
+        const cwd = await mkdtemp(join(tmpdir(), "agentiam-shim-cwd-"));
         const output = join(home, "args.txt");
         await fakeTool(bin, "gh");
         await mkdir(join(home, ".agentiam"));
@@ -60,6 +133,7 @@ describe("command shim", () => {
                 AGENTIAM_ORIGINAL_PATH: bin,
                 AGENTIAM_TEST_OUTPUT: output,
             },
+            cwd,
         });
         expect(code).toBe(126);
         await expect(readFile(output, "utf8")).rejects.toThrow();
@@ -68,6 +142,7 @@ describe("command shim", () => {
     it("enforces repository-scoped GitHub rules before executing gh", async () => {
         const home = await mkdtemp(join(tmpdir(), "agentiam-shim-home-"));
         const bin = await mkdtemp(join(tmpdir(), "agentiam-shim-bin-"));
+        const cwd = await mkdtemp(join(tmpdir(), "agentiam-shim-cwd-"));
         const output = join(home, "args.txt");
         await fakeTool(bin, "gh");
         await mkdir(join(home, ".agentiam"));
@@ -85,6 +160,7 @@ describe("command shim", () => {
             tool: "gh",
             args: ["--repo", "owner/repo", "pr", "merge", "42"],
             env,
+            cwd,
         });
         expect(allowed).toBe(7);
         expect(await readFile(output, "utf8")).toBe(
@@ -95,6 +171,7 @@ describe("command shim", () => {
             tool: "gh",
             args: ["--repo", "other/repo", "pr", "merge", "42"],
             env,
+            cwd,
         });
         expect(denied).toBe(126);
         expect(await readFile(output, "utf8")).toBe(

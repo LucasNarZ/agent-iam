@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { parse } from "yaml";
 
 const registry = {
@@ -131,10 +132,44 @@ export function parsePolicy(source: string): Policy {
 
 export async function loadPolicy(
     env: NodeJS.ProcessEnv = process.env,
-): Promise<{ policy: Policy; path: string }> {
+    cwd = process.cwd(),
+): Promise<{ policy: Policy; path: string; directoryPolicies: Policy[] }> {
     const path = resolvePolicyPath(env);
     try {
-        return { policy: parsePolicy(await readFile(path, "utf8")), path };
+        const policy = parsePolicy(await readFile(path, "utf8"));
+        const directoryPolicies: Policy[] = [];
+        const globalPath = resolve(path);
+        let directory = resolve(cwd);
+        while (true) {
+            const directoryPolicyPath = join(
+                directory,
+                ".agentiam",
+                "policy.yaml",
+            );
+            if (directoryPolicyPath !== globalPath) {
+                try {
+                    directoryPolicies.unshift(
+                        parsePolicy(
+                            await readFile(directoryPolicyPath, "utf8"),
+                        ),
+                    );
+                } catch (error) {
+                    if (!(
+                        error instanceof Error &&
+                        "code" in error &&
+                        error.code === "ENOENT"
+                    )) {
+                        throw new PolicyError(
+                            `${directoryPolicyPath}: ${error instanceof Error ? error.message : String(error)}`,
+                        );
+                    }
+                }
+            }
+            const parent = dirname(directory);
+            if (parent === directory) break;
+            directory = parent;
+        }
+        return { policy, path, directoryPolicies };
     } catch (error) {
         if (error instanceof PolicyError)
             throw new PolicyError(`${path}: ${error.message}`);

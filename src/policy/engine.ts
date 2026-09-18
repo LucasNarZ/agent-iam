@@ -1,6 +1,6 @@
 import pl from "tau-prolog";
 import type { CanonicalCapability } from "../capability.js";
-import type { Policy } from "./schema.js";
+import type { CapabilityKey, Policy, PolicyRules } from "./schema.js";
 import { compilePolicy, escapePrologAtom } from "./compiler.js";
 
 export interface PolicyDecision {
@@ -116,4 +116,35 @@ export function evaluatePolicy(
               }
             : capability;
     return new PolicyEngine(compilePolicy(policy)).evaluate(normalized);
+}
+
+export async function evaluatePolicies(
+    globalPolicy: Policy,
+    directoryPolicies: Policy[],
+    capability: CanonicalCapability,
+): Promise<PolicyDecision> {
+    const globalDecision = await evaluatePolicy(globalPolicy, capability);
+    if (globalDecision.decision === "DENY") return globalDecision;
+
+    const key = capability.canonical as CapabilityKey;
+    for (const policy of directoryPolicies) {
+        if (policy.deny[key] !== undefined) {
+            const decision = await evaluatePolicy(
+                {
+                    allow: { [key]: true } as PolicyRules,
+                    deny: policy.deny,
+                },
+                capability,
+            );
+            if (decision.decision === "DENY") return decision;
+        }
+        if (policy.allow[key] !== undefined) {
+            const decision = await evaluatePolicy(
+                { allow: policy.allow, deny: {} },
+                capability,
+            );
+            if (decision.decision === "DENY") return decision;
+        }
+    }
+    return globalDecision;
 }

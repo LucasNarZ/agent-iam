@@ -106,6 +106,19 @@ agentiam init
 
 `init` does not overwrite an existing policy file.
 
+### Directory Policies
+
+Agent IAM also reads `.agentiam/policy.yaml` from the current directory and each parent directory. These policies can only add restrictions to `~/.agentiam/policy.yaml`: their deny rules deny additional matching actions, and their allow rules add required constraints to actions already allowed globally. A directory policy can never allow an action denied or omitted by the global policy.
+
+For example, this project policy prevents merges even when the global policy allows them:
+
+```yaml
+deny:
+  github.pr.merge: true
+```
+
+An invalid directory policy fails closed and denies the action.
+
 ## Commands
 
 Initialize the user policy:

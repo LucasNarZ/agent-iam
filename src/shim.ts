@@ -1,5 +1,5 @@
 import { resolvePolicyPath, loadPolicy } from "./policy/schema.js";
-import { evaluatePolicy } from "./policy/engine.js";
+import { evaluatePolicies } from "./policy/engine.js";
 import { appendAuditRecord, renderCommand } from "./audit.js";
 import { resolveExecutable, spawnInherited } from "./process.js";
 import { adapters } from "./adapters/index.js";
@@ -9,6 +9,7 @@ export interface ShimOptions {
     tool: "git" | "gh";
     args: string[];
     env: NodeJS.ProcessEnv;
+    cwd?: string;
     stdout?: NodeJS.WritableStream;
     stderr?: NodeJS.WritableStream;
 }
@@ -34,8 +35,12 @@ export async function runShim(options: ShimOptions): Promise<number> {
     let decision: "ALLOW" | "DENY" = "DENY";
     let reason = "policy evaluation failed";
     try {
-        const loaded = await loadPolicy(options.env);
-        const result = await evaluatePolicy(loaded.policy, capability);
+        const loaded = await loadPolicy(options.env, options.cwd);
+        const result = await evaluatePolicies(
+            loaded.policy,
+            loaded.directoryPolicies,
+            capability,
+        );
         decision = result.decision;
         reason = result.reason;
     } catch (error) {
