@@ -98,7 +98,21 @@ An explicit deny always wins over an allow. An unmatched capability is denied. C
 
 The example policy is available at `examples/policy.yaml`.
 
+Create `~/.agentiam/policy.yaml` from that example:
+
+```bash
+agentiam init
+```
+
+`init` does not overwrite an existing policy file.
+
 ## Commands
+
+Initialize the user policy:
+
+```bash
+agentiam init
+```
 
 Run an agent inside the temporary shim environment:
 
