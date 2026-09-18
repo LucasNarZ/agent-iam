@@ -8,6 +8,21 @@ import { describe, expect, it } from "vitest";
 const exec = promisify(execFile);
 
 describe("built CLI", () => {
+    it("initializes the user policy from the example", async () => {
+        const home = await mkdtemp(join(tmpdir(), "agentiam-cli-home-"));
+        const cli = resolve("dist/index.js");
+
+        await exec(process.execPath, [cli, "init"], {
+            env: { ...process.env, HOME: home },
+        });
+
+        await expect(
+            readFile(join(home, ".agentiam", "policy.yaml"), "utf8"),
+        ).resolves.toBe(
+            await readFile(resolve("examples/policy.yaml"), "utf8"),
+        );
+    });
+
     it("inspects policy and runs allowed and denied commands", async () => {
         const home = await mkdtemp(join(tmpdir(), "agentiam-cli-home-"));
         const bin = await mkdtemp(join(tmpdir(), "agentiam-cli-bin-"));

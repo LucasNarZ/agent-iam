@@ -1,3 +1,6 @@
+import { constants } from "node:fs";
+import { copyFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import { loadPolicy, resolvePolicyPath } from "./policy/schema.js";
 import { runShim } from "./shim.js";
 import { runWithShims } from "./runner.js";
@@ -16,7 +19,7 @@ export interface CliDependencies {
 }
 
 function usage(): string {
-    return "Usage: agentiam run -- <command> [args...]\n       agentiam inspect";
+    return "Usage: agentiam init\n       agentiam inspect\n       agentiam run -- <command> [args...]";
 }
 
 export async function main(
@@ -37,6 +40,28 @@ export async function main(
     if (!command) {
         output.stderr.write(`${usage()}\n`);
         return 1;
+    }
+    if (command === "init") {
+        if (args.length !== 1) {
+            output.stderr.write("agentiam init does not accept arguments\n");
+            return 1;
+        }
+        const policyPath = resolvePolicyPath(env);
+        try {
+            await mkdir(dirname(policyPath), { recursive: true });
+            await copyFile(
+                new URL("../examples/policy.yaml", import.meta.url),
+                policyPath,
+                constants.COPYFILE_EXCL,
+            );
+            output.stdout.write(`Initialized policy: ${policyPath}\n`);
+            return 0;
+        } catch (error) {
+            output.stderr.write(
+                `[agentiam] ERROR ${error instanceof Error ? error.message : String(error)}\n`,
+            );
+            return 1;
+        }
     }
     if (command === "inspect") {
         if (args.length !== 1) {
