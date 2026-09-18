@@ -12,28 +12,29 @@ export class PolicyEngineError extends Error {}
 
 type Session = ReturnType<typeof pl.create>;
 
-function resourceTerms(capability: CanonicalCapability): string {
-    const resources =
+function constraintTerms(capability: CanonicalCapability): string {
+    const constraints =
         capability.service === "github"
-            ? capability.resources?.repository
+            ? capability.constraints?.repository
                 ? [
-                      `resource(repos, '${escapePrologAtom(capability.resources.repository)}')`,
+                      `constraint(repos, '${escapePrologAtom(capability.constraints.repository)}')`,
                   ]
                 : []
             : [
-                  ...(capability.resources?.paths ?? []).map(
-                      (path) => `resource(paths, '${escapePrologAtom(path)}')`,
+                  ...(capability.constraints?.paths ?? []).map(
+                      (path) =>
+                          `constraint(paths, '${escapePrologAtom(path)}')`,
                   ),
-                  ...(capability.resources?.branches ?? []).map(
+                  ...(capability.constraints?.branches ?? []).map(
                       (branch) =>
-                          `resource(branches, '${escapePrologAtom(branch)}')`,
+                          `constraint(branches, '${escapePrologAtom(branch)}')`,
                   ),
               ];
-    return `[${resources.join(", ")}]`;
+    return `[${constraints.join(", ")}]`;
 }
 
 export function buildDecisionGoal(capability: CanonicalCapability): string {
-    return `decision('${escapePrologAtom(capability.canonical)}', ${resourceTerms(capability)}, Decision, Reason).`;
+    return `decision('${escapePrologAtom(capability.canonical)}', ${constraintTerms(capability)}, Decision, Reason).`;
 }
 
 function consult(session: Session, program: string): Promise<void> {

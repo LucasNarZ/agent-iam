@@ -62,7 +62,7 @@ describe("policy compiler", () => {
         expect(program).toContain("allowed('git.commit').");
         expect(program).toContain("denied('github.pr.merge').");
         expect(program).toContain(
-            "decision(Capability, Resources, deny, 'matched deny rule') :- denied(Capability), rule_matches(deny, Capability, Resources), !.",
+            "decision(Capability, Constraints, deny, 'matched deny rule') :- denied(Capability), rule_matches(deny, Capability, Constraints), !.",
         );
         expect(escapePrologAtom("a'b\\c")).toBe("a\\'b\\\\c");
     });
@@ -149,7 +149,7 @@ describe("policy engine", () => {
                 service: "github",
                 action: "merge",
                 canonical: "github.pr.merge",
-                resources: { repository: "owner/repo" },
+                constraints: { repository: "owner/repo" },
             }),
         ).resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
         await expect(
@@ -157,7 +157,7 @@ describe("policy engine", () => {
                 service: "github",
                 action: "merge",
                 canonical: "github.pr.merge",
-                resources: { repository: "other/repo" },
+                constraints: { repository: "other/repo" },
             }),
         ).resolves.toEqual({
             decision: "DENY",
@@ -165,7 +165,7 @@ describe("policy engine", () => {
         });
     });
 
-    it("requires every Git path resource to match the policy", async () => {
+    it("requires every Git path constraint to match the policy", async () => {
         const policy = {
             allow: {
                 "git.commit": { paths: ["src/policy.ts"] },
@@ -178,7 +178,7 @@ describe("policy engine", () => {
                 service: "git",
                 action: "commit",
                 canonical: "git.commit",
-                resources: { paths: ["src/policy.ts"] },
+                constraints: { paths: ["src/policy.ts"] },
             }),
         ).resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
         await expect(
@@ -186,7 +186,7 @@ describe("policy engine", () => {
                 service: "git",
                 action: "commit",
                 canonical: "git.commit",
-                resources: { paths: ["src/policy.ts", "README.md"] },
+                constraints: { paths: ["src/policy.ts", "README.md"] },
             }),
         ).resolves.toEqual({
             decision: "DENY",

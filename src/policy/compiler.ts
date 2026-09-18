@@ -34,12 +34,12 @@ export function compilePolicy(policy: Policy): string {
         ...denied,
         ...constraints,
         "rule_matches(Kind, Capability, _) :- \\+ rule_constraint(Kind, Capability, _, _), !.",
-        "resource_member(Value, [Value|_]).",
-        "resource_member(Value, [_|Tail]) :- resource_member(Value, Tail).",
-        "constraint_matches(Kind, Capability, Constraint, Resources) :- resource_member(resource(Constraint, _), Resources), \\+ (resource_member(resource(Constraint, Value), Resources), \\+ rule_constraint(Kind, Capability, Constraint, Value)).",
-        "rule_matches(Kind, Capability, Resources) :- \\+ (rule_constraint(Kind, Capability, Constraint, _), \\+ constraint_matches(Kind, Capability, Constraint, Resources)).",
-        "decision(Capability, Resources, deny, 'matched deny rule') :- denied(Capability), rule_matches(deny, Capability, Resources), !.",
-        "decision(Capability, Resources, allow, 'matched allow rule') :- allowed(Capability), rule_matches(allow, Capability, Resources), !.",
+        "constraint_member(Value, [Value|_]).",
+        "constraint_member(Value, [_|Tail]) :- constraint_member(Value, Tail).",
+        "constraint_matches(Kind, Capability, Constraint, Constraints) :- constraint_member(constraint(Constraint, _), Constraints), \\+ (constraint_member(constraint(Constraint, Value), Constraints), \\+ rule_constraint(Kind, Capability, Constraint, Value)).",
+        "rule_matches(Kind, Capability, Constraints) :- \\+ (rule_constraint(Kind, Capability, Constraint, _), \\+ constraint_matches(Kind, Capability, Constraint, Constraints)).",
+        "decision(Capability, Constraints, deny, 'matched deny rule') :- denied(Capability), rule_matches(deny, Capability, Constraints), !.",
+        "decision(Capability, Constraints, allow, 'matched allow rule') :- allowed(Capability), rule_matches(allow, Capability, Constraints), !.",
         "decision(_, _, deny, 'no matching allow rule').",
     ].join("\n");
 }

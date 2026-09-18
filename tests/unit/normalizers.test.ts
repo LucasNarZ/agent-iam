@@ -15,7 +15,7 @@ describe("command adapters", () => {
             (await gitAdapter.normalize(["commit", "-m", "fix"])).canonical,
         ).toBe("git.commit");
         expect(
-            (await gitAdapter.normalize(["commit", "-m", "fix"])).resources,
+            (await gitAdapter.normalize(["commit", "-m", "fix"])).constraints,
         ).toEqual({ paths: ["src/policy.ts"] });
         expect((await gitAdapter.normalize(["remote", "-v"])).canonical).toBe(
             "git.remote",
@@ -45,7 +45,8 @@ describe("command adapters", () => {
             ).canonical,
         ).toBe("git.push");
         expect(
-            (await gitAdapter.normalize(["push", "origin", "main"])).resources,
+            (await gitAdapter.normalize(["push", "origin", "main"]))
+                .constraints,
         ).toEqual({ branches: ["main"] });
         expect(
             (await gitAdapter.normalize(["--git-dir=/repo/.git", "status"]))
@@ -81,7 +82,7 @@ describe("command adapters", () => {
                     "merge",
                     "42",
                 ])
-            ).resources,
+            ).constraints,
         ).toEqual({ repository: "owner/repo", pullRequest: 42 });
         expect((await ghAdapter.normalize(["auth"])).canonical).toBe(
             "github.auth",
@@ -107,7 +108,7 @@ describe("command adapters", () => {
                 AGENTIAM_ORIGINAL_PATH: bin,
             }),
         ).resolves.toMatchObject({
-            resources: { repository: "owner/repo" },
+            constraints: { repository: "owner/repo" },
         });
     });
 });

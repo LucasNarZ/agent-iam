@@ -79,13 +79,13 @@ export class GitCliAdapter implements Adapter<"git"> {
             if (command.canonical === "git.commit") {
                 const paths = await this.readStagedPaths(env);
                 return paths.length > 0
-                    ? { ...command, resources: { paths } }
+                    ? { ...command, constraints: { paths } }
                     : command;
             }
             if (command.canonical === "git.push") {
                 const branch = await this.readCurrentBranch(env);
                 return branch
-                    ? { ...command, resources: { branches: [branch] } }
+                    ? { ...command, constraints: { branches: [branch] } }
                     : command;
             }
             return command;

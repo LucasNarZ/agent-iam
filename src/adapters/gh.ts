@@ -84,12 +84,12 @@ export class GithubCliAdapter implements Adapter<"github"> {
         const repository =
             explicitRepository(args) ?? (await repositoryFromGit(env));
         const pullRequest = pullRequestNumber(positional);
-        const resources = {
+        const constraints = {
             ...(repository ? { repository } : {}),
             ...(pullRequest === undefined ? {} : { pullRequest }),
         };
-        return Object.keys(resources).length > 0
-            ? { ...command, resources }
+        return Object.keys(constraints).length > 0
+            ? { ...command, constraints }
             : command;
     }
 }

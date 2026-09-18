@@ -1,4 +1,4 @@
-export interface ResourceMap {
+export interface ConstraintMap {
     git: {
         paths?: string[];
         branches?: string[];
@@ -9,7 +9,7 @@ export interface ResourceMap {
     };
 }
 
-export type CapabilityService = keyof ResourceMap;
+export type CapabilityService = keyof ConstraintMap;
 
 export type CanonicalCapability<
     Service extends CapabilityService = CapabilityService,
@@ -18,7 +18,7 @@ export type CanonicalCapability<
         service: Key;
         action: string;
         canonical: string;
-        resources?: ResourceMap[Key];
+        constraints?: ConstraintMap[Key];
     };
 }[Service];
 
@@ -33,16 +33,16 @@ export function normalizeSegment(value: string): string {
 export function capability<Service extends CapabilityService>(
     service: Service,
     action: string,
-    resource?: string,
+    segment?: string,
 ): CanonicalCapability<Service> {
     const normalizedAction = normalizeSegment(action);
-    const normalizedResource =
-        resource === undefined ? undefined : normalizeSegment(resource);
-    const canonical = normalizedResource
-        ? `${service}.${normalizedResource}.${normalizedAction}`
+    const normalizedSegment =
+        segment === undefined ? undefined : normalizeSegment(segment);
+    const canonical = normalizedSegment
+        ? `${service}.${normalizedSegment}.${normalizedAction}`
         : `${service}.${normalizedAction}`;
     return (
-        normalizedResource
+        normalizedSegment
             ? {
                   service,
                   action: normalizedAction,
