@@ -23,7 +23,7 @@ describe("command shim", () => {
         await mkdir(join(home, ".agentiam"));
         await writeFile(
             join(home, ".agentiam", "policy.yaml"),
-            "allow:\n  - git.commit\n",
+            "allow:\n  git.commit: true\n",
         );
         const code = await runShim({
             tool: "git",
@@ -49,7 +49,7 @@ describe("command shim", () => {
         await mkdir(join(home, ".agentiam"));
         await writeFile(
             join(home, ".agentiam", "policy.yaml"),
-            "deny:\n  - github.pr.merge\n",
+            "deny:\n  github.pr.merge: true\n",
         );
         const code = await runShim({
             tool: "gh",
@@ -63,5 +63,42 @@ describe("command shim", () => {
         });
         expect(code).toBe(126);
         await expect(readFile(output, "utf8")).rejects.toThrow();
+    });
+
+    it("enforces repository-scoped GitHub rules before executing gh", async () => {
+        const home = await mkdtemp(join(tmpdir(), "agentiam-shim-home-"));
+        const bin = await mkdtemp(join(tmpdir(), "agentiam-shim-bin-"));
+        const output = join(home, "args.txt");
+        await fakeTool(bin, "gh");
+        await mkdir(join(home, ".agentiam"));
+        await writeFile(
+            join(home, ".agentiam", "policy.yaml"),
+            "allow:\n  github.pr.merge:\n    repos:\n      - owner/repo\n",
+        );
+        const env = {
+            HOME: home,
+            PATH: bin,
+            AGENTIAM_ORIGINAL_PATH: bin,
+            AGENTIAM_TEST_OUTPUT: output,
+        };
+        const allowed = await runShim({
+            tool: "gh",
+            args: ["--repo", "owner/repo", "pr", "merge", "42"],
+            env,
+        });
+        expect(allowed).toBe(7);
+        expect(await readFile(output, "utf8")).toBe(
+            "--repo\nowner/repo\npr\nmerge\n42\n",
+        );
+
+        const denied = await runShim({
+            tool: "gh",
+            args: ["--repo", "other/repo", "pr", "merge", "42"],
+            env,
+        });
+        expect(denied).toBe(126);
+        expect(await readFile(output, "utf8")).toBe(
+            "--repo\nowner/repo\npr\nmerge\n42\n",
+        );
     });
 });

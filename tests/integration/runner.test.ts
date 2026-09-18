@@ -13,7 +13,7 @@ describe("shim runner", () => {
         await mkdir(join(home, ".agentiam"));
         await writeFile(
             join(home, ".agentiam", "policy.yaml"),
-            "allow:\n  - git.commit\n",
+            "allow:\n  git.commit: true\n",
         );
         await writeFile(
             join(bin, "git"),

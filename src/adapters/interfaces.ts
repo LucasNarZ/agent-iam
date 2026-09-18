@@ -1,7 +1,8 @@
-import { CanonicalCapability } from "../capability";
+import type { CanonicalCapability, CapabilityService } from "../capability.js";
 
-export interface Adapter {
+export interface Adapter<Service extends CapabilityService> {
     normalize(
-        input: unknown,
-    ): CanonicalCapability | Promise<CanonicalCapability>;
+        args: string[],
+        env?: NodeJS.ProcessEnv,
+    ): CanonicalCapability<Service> | Promise<CanonicalCapability<Service>>;
 }

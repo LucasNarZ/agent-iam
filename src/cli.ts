@@ -45,16 +45,16 @@ export async function main(
         }
         try {
             const { policy } = await loadPolicy(env);
+            const allow = Object.keys(policy.allow)
+                .sort()
+                .map((item) => `  ${item}`)
+                .join("\n");
+            const deny = Object.keys(policy.deny)
+                .sort()
+                .map((item) => `  ${item}`)
+                .join("\n");
             output.stdout.write(
-                `Policy: ${resolvePolicyPath(env)}\nDefault: DENY\n\nALLOW\n${policy.allow
-                    .slice()
-                    .sort()
-                    .map((item) => `  ${item}`)
-                    .join("\n")}\n\nDENY\n${policy.deny
-                    .slice()
-                    .sort()
-                    .map((item) => `  ${item}`)
-                    .join("\n")}\n`,
+                `Policy: ${resolvePolicyPath(env)}\nDefault: DENY\n\nALLOW\n${allow}\n\nDENY\n${deny}\n`,
             );
             return 0;
         } catch (error) {

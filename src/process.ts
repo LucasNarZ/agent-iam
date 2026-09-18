@@ -28,6 +28,29 @@ export interface ChildResult {
     signal: NodeJS.Signals | null;
 }
 
+export function captureOutput(
+    command: string,
+    args: string[],
+    env: NodeJS.ProcessEnv,
+): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const child = spawn(command, args, {
+            env,
+            stdio: ["ignore", "pipe", "ignore"],
+        });
+        let output = "";
+        child.stdout?.setEncoding("utf8");
+        child.stdout?.on("data", (chunk: string) => {
+            output += chunk;
+        });
+        child.once("error", reject);
+        child.once("close", (code) => {
+            if (code === 0) resolve(output);
+            else reject(new Error(`${command} exited with code ${code}`));
+        });
+    });
+}
+
 export function spawnInherited(
     command: string,
     args: string[],

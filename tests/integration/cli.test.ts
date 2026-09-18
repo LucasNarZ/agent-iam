@@ -15,7 +15,7 @@ describe("built CLI", () => {
         await mkdir(join(home, ".agentiam"));
         await writeFile(
             join(home, ".agentiam", "policy.yaml"),
-            "allow:\n  - git.commit\ndeny:\n  - github.pr.merge\n",
+            "allow:\n  git.commit: true\ndeny:\n  github.pr.merge: true\n",
         );
         await writeFile(
             join(bin, "git"),

@@ -1,5 +1,3 @@
-import { normalizeGit } from "./adapters/git.js";
-import { normalizeGh } from "./adapters/gh.js";
 import { resolvePolicyPath, loadPolicy } from "./policy/schema.js";
 import { evaluatePolicy } from "./policy/engine.js";
 import { appendAuditRecord, renderCommand } from "./audit.js";
@@ -25,6 +23,7 @@ function write(
 export async function runShim(options: ShimOptions): Promise<number> {
     const capability = await adapters[options.tool + "cli"]?.normalize(
         options.args,
+        options.env,
     );
 
     if (!capability) {
@@ -36,10 +35,7 @@ export async function runShim(options: ShimOptions): Promise<number> {
     let reason = "policy evaluation failed";
     try {
         const loaded = await loadPolicy(options.env);
-        const result = await evaluatePolicy(
-            loaded.policy,
-            capability.canonical,
-        );
+        const result = await evaluatePolicy(loaded.policy, capability);
         decision = result.decision;
         reason = result.reason;
     } catch (error) {

@@ -1,9 +1,26 @@
-export interface CanonicalCapability {
-    service: "git" | "github";
-    resource?: string;
-    action: string;
-    canonical: string;
+export interface ResourceMap {
+    git: {
+        paths?: string[];
+        branches?: string[];
+    };
+    github: {
+        repository?: string;
+        pullRequest?: number;
+    };
 }
+
+export type CapabilityService = keyof ResourceMap;
+
+export type CanonicalCapability<
+    Service extends CapabilityService = CapabilityService,
+> = {
+    [Key in Service]: {
+        service: Key;
+        action: string;
+        canonical: string;
+        resources?: ResourceMap[Key];
+    };
+}[Service];
 
 export function normalizeSegment(value: string): string {
     const segment = value
@@ -13,23 +30,24 @@ export function normalizeSegment(value: string): string {
     return segment || "unknown";
 }
 
-export function capability(
-    service: CanonicalCapability["service"],
+export function capability<Service extends CapabilityService>(
+    service: Service,
     action: string,
     resource?: string,
-): CanonicalCapability {
+): CanonicalCapability<Service> {
     const normalizedAction = normalizeSegment(action);
     const normalizedResource =
         resource === undefined ? undefined : normalizeSegment(resource);
     const canonical = normalizedResource
         ? `${service}.${normalizedResource}.${normalizedAction}`
         : `${service}.${normalizedAction}`;
-    return normalizedResource
-        ? {
-              service,
-              resource: normalizedResource,
-              action: normalizedAction,
-              canonical,
-          }
-        : { service, action: normalizedAction, canonical };
+    return (
+        normalizedResource
+            ? {
+                  service,
+                  action: normalizedAction,
+                  canonical,
+              }
+            : { service, action: normalizedAction, canonical }
+    ) as CanonicalCapability<Service>;
 }

@@ -79,22 +79,22 @@ node dist/index.js inspect
 
 ## Policy
 
-Agent IAM reads only `~/.agentiam/policy.yaml` in the MVP. Create it with exact canonical capabilities:
+Agent IAM reads only `~/.agentiam/policy.yaml` in the MVP. Define allow and deny rules by exact canonical capability:
 
 ```yaml
 allow:
-  - git.commit
-  - git.remote
-  - git.config
-  - git.symbolic-ref
-  - github.pr.create
-  - github.pr.view
+  git.commit: true
+  git.remote: true
+  git.config: true
+  git.symbolic-ref: true
+  github.pr.create: true
+  github.pr.view: true
 deny:
-  - git.push
-  - github.pr.merge
+  git.push: true
+  github.pr.merge: true
 ```
 
-An explicit deny always wins over an allow. An unmatched capability is denied. Missing or invalid policy files are also denied.
+An explicit deny always wins over an allow. An unmatched capability is denied. Capability names and constraint names are validated against the supported policy registry; missing or invalid policy files are also denied.
 
 The example policy is available at `examples/policy.yaml`.
 

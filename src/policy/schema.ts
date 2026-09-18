@@ -2,14 +2,72 @@ import { homedir } from "node:os";
 import { readFile } from "node:fs/promises";
 import { parse } from "yaml";
 
+const registry = {
+    git: {
+        actions: {
+            commit: { constraints: ["paths"] },
+            push: { constraints: ["branches"] },
+            remote: { constraints: [] },
+            config: { constraints: [] },
+            "symbolic-ref": { constraints: [] },
+            status: { constraints: [] },
+            log: { constraints: [] },
+            diff: { constraints: [] },
+            "rev-parse": { constraints: [] },
+        },
+    },
+    github: {
+        actions: {
+            "pr.create": { constraints: ["repos"] },
+            "pr.merge": { constraints: ["repos"] },
+            "pr.view": { constraints: ["repos"] },
+            "pr.status": { constraints: ["repos"] },
+            "pr.checks": { constraints: ["repos"] },
+            "pr.diff": { constraints: ["repos"] },
+            "pr.list": { constraints: ["repos"] },
+            "repo.view": { constraints: ["repos"] },
+        },
+    },
+} as const;
+
+type ServiceOf = keyof typeof registry;
+type ActionOf<S extends ServiceOf> = keyof (typeof registry)[S]["actions"];
+
+export type CapabilityKey = {
+    [S in ServiceOf]: `${S}.${ActionOf<S> & string}`;
+}[ServiceOf];
+
+type DefinitionOf<Key extends CapabilityKey> =
+    Key extends `${infer Service}.${infer Action}`
+        ? Service extends ServiceOf
+            ? Action extends ActionOf<Service>
+                ? (typeof registry)[Service]["actions"][Action]
+                : never
+            : never
+        : never;
+
+type PolicyRule<Key extends CapabilityKey> =
+    true | Partial<Record<DefinitionOf<Key>["constraints"][number], string[]>>;
+
+export type PolicyRules = Partial<{
+    [Key in CapabilityKey]: PolicyRule<Key>;
+}>;
+
 export interface Policy {
-    allow: string[];
-    deny: string[];
+    allow: PolicyRules;
+    deny: PolicyRules;
 }
 
 export class PolicyError extends Error {}
 
-const capabilityPattern = /^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+$/;
+function definitionFor(
+    capability: string,
+): { constraints: readonly string[] } | undefined {
+    const [service, ...actionParts] = capability.split(".");
+    if (service !== "git" && service !== "github") return undefined;
+    const action = actionParts.join(".");
+    return registry[service].actions[action as never];
+}
 
 export function resolvePolicyPath(
     env: NodeJS.ProcessEnv = process.env,
@@ -33,24 +91,42 @@ export function parsePolicy(source: string): Policy {
         if (key !== "allow" && key !== "deny")
             throw new PolicyError(`Unknown policy key '${key}'`);
     }
-    const readList = (key: "allow" | "deny"): string[] => {
+    const readRules = (key: "allow" | "deny"): PolicyRules => {
         const entry = root[key];
-        if (entry === undefined) return [];
-        if (!Array.isArray(entry))
-            throw new PolicyError(`Policy '${key}' must be an array`);
-        const result: string[] = [];
-        for (const item of entry) {
-            if (typeof item !== "string" || !capabilityPattern.test(item))
-                throw new PolicyError(`Invalid capability in '${key}'`);
-            if (result.includes(item))
+        if (entry === undefined) return {};
+        if (!entry || typeof entry !== "object" || Array.isArray(entry))
+            throw new PolicyError(`Policy '${key}' must be an object`);
+        const result: Record<string, PolicyRule<CapabilityKey>> = {};
+        for (const [capability, rule] of Object.entries(entry)) {
+            const definition = definitionFor(capability);
+            if (!definition)
+                throw new PolicyError(`Unknown capability '${capability}'`);
+            if (rule === true) {
+                result[capability] = true;
+                continue;
+            }
+            if (!rule || typeof rule !== "object" || Array.isArray(rule))
                 throw new PolicyError(
-                    `Duplicate capability '${item}' in '${key}'`,
+                    `Policy rule '${capability}' in '${key}' must be true or an object`,
                 );
-            result.push(item);
+            for (const [name, values] of Object.entries(rule)) {
+                if (!definition.constraints.includes(name))
+                    throw new PolicyError(
+                        `Unknown constraint '${name}' for '${capability}'`,
+                    );
+                if (
+                    !Array.isArray(values) ||
+                    values.some((value) => typeof value !== "string")
+                )
+                    throw new PolicyError(
+                        `Constraint '${name}' for '${capability}' must be an array of strings`,
+                    );
+            }
+            result[capability] = rule as PolicyRule<CapabilityKey>;
         }
-        return result;
+        return result as PolicyRules;
     };
-    return { allow: readList("allow"), deny: readList("deny") };
+    return { allow: readRules("allow"), deny: readRules("deny") };
 }
 
 export async function loadPolicy(
