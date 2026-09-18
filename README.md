@@ -79,7 +79,7 @@ node dist/index.js inspect
 
 ## Policy
 
-Agent IAM reads only `~/.agentiam/policy.yaml` in the MVP. Define allow and deny rules by exact canonical capability:
+Agent IAM reads the global user policy at `~/.agentiam/policy.yaml`. Define allow and deny rules by exact canonical capability:
 
 ```yaml
 allow:
@@ -134,7 +134,7 @@ agentiam run -- opencode
 agentiam run -- sh -c 'git commit -m "fix"'
 ```
 
-Inspect the current exact-match policy:
+Inspect the global user policy:
 
 ```bash
 agentiam inspect
