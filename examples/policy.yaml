@@ -1,19 +1,19 @@
 allow:
-  - git.commit
-  - github.pr.create
-  - github.pr.view
-  - git.remote 
-  - git.config
-  - git.symbolic-ref
-  - git.status
-  - github.pr.status
-  - git.log
-  - git.diff
-  - github.pr.checks
-  - git.rev-parse
-  - github.pr.diff
-  - github.pr.list
-  - github.repo.view
+  git.commit: true
+  github.pr.create: true
+  github.pr.view: true
+  git.remote: true
+  git.config: true
+  git.symbolic-ref: true
+  git.status: true
+  github.pr.status: true
+  git.log: true
+  git.diff: true
+  github.pr.checks: true
+  git.rev-parse: true
+  github.pr.diff: true
+  github.pr.list: true
+  github.repo.view: true
 deny:
-  - git.push
-  - github.pr.merge
+  git.push: true
+  github.pr.merge: true

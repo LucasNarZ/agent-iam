@@ -1,70 +1,224 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { normalizeGit } from "../../src/normalizers/git.js";
-import { normalizeGh } from "../../src/normalizers/gh.js";
 import { parsePolicy } from "../../src/policy/schema.js";
 import { compilePolicy, escapePrologAtom } from "../../src/policy/compiler.js";
-import { buildDecisionGoal, evaluatePolicy } from "../../src/policy/engine.js";
+import {
+    buildDecisionGoal,
+    evaluatePolicy,
+    PolicyEngine,
+} from "../../src/policy/engine.js";
 
 describe("policy schema", () => {
-  it("parses exact allow and deny lists", () => {
-    expect(parsePolicy("allow:\n  - git.commit\n")).toEqual({ allow: ["git.commit"], deny: [] });
-    expect(parsePolicy("deny:\n  - github.pr.merge\n")).toEqual({ allow: [], deny: ["github.pr.merge"] });
-  });
+    it("parses capability-keyed allow and deny rules", () => {
+        expect(parsePolicy("allow:\n  git.commit: true\n")).toEqual({
+            allow: { "git.commit": true },
+            deny: {},
+        });
+        expect(
+            parsePolicy(
+                "deny:\n  github.pr.merge:\n    repos:\n      - owner/repo\n",
+            ),
+        ).toEqual({
+            allow: {},
+            deny: { "github.pr.merge": { repos: ["owner/repo"] } },
+        });
+        expect(
+            parsePolicy(
+                "allow:\n  github.pr.list:\n    repos:\n      - owner/repo\n",
+            ),
+        ).toEqual({
+            allow: { "github.pr.list": { repos: ["owner/repo"] } },
+            deny: {},
+        });
+    });
 
-  it("rejects invalid policy shapes", () => {
-    expect(() => parsePolicy("allow: git.commit\n")).toThrow("Policy 'allow' must be an array");
-    expect(() => parsePolicy("allow:\n  - INVALID VALUE\n")).toThrow("Invalid capability");
-  });
+    it("rejects invalid policy entries", () => {
+        expect(() => parsePolicy("allow: git.commit\n")).toThrow(
+            "Policy 'allow' must be an object",
+        );
+        expect(() => parsePolicy("allow:\n  github.pr.close: true\n")).toThrow(
+            "Unknown capability 'github.pr.close'",
+        );
+        expect(() =>
+            parsePolicy("allow:\n  git.commit:\n    branches:\n      - main\n"),
+        ).toThrow("Unknown constraint 'branches' for 'git.commit'");
+        expect(() =>
+            parsePolicy("allow:\n  git.commit:\n    paths: src/**\n"),
+        ).toThrow(
+            "Constraint 'paths' for 'git.commit' must be an array of strings",
+        );
+        expect(() => parsePolicy("allow:\n  git.commit: false\n")).toThrow(
+            "Policy rule 'git.commit' in 'allow' must be true or an object",
+        );
+    });
 });
 
 describe("policy compiler", () => {
-  it("compiles rules and escapes atoms", () => {
-    const program = compilePolicy({ allow: ["git.commit"], deny: ["github.pr.merge"] });
-    expect(program).toContain("allowed('git.commit').");
-    expect(program).toContain("denied('github.pr.merge').");
-    expect(program).toContain("decision(Capability, deny) :- denied(Capability), !.");
-    expect(escapePrologAtom("a'b\\c")).toBe("a\\'b\\\\c");
-  });
+    it("compiles rules and escapes atoms", () => {
+        const program = compilePolicy({
+            allow: { "git.commit": true },
+            deny: { "github.pr.merge": true },
+        });
+        expect(program).toContain("allowed('git.commit').");
+        expect(program).toContain("denied('github.pr.merge').");
+        expect(program).toContain(
+            "decision(Capability, Constraints, deny, 'matched deny rule') :- denied(Capability), rule_matches(deny, Capability, Constraints), !.",
+        );
+        expect(escapePrologAtom("a'b\\c")).toBe("a\\'b\\\\c");
+    });
 });
 
 describe("policy engine", () => {
-  it("delegates the final allow decision to decision/2", () => {
-    expect(buildDecisionGoal("git.commit")).toBe("decision('git.commit', Decision).");
-  });
+    it("delegates the final allow decision to decision/2", () => {
+        expect(
+            buildDecisionGoal({
+                service: "git",
+                action: "commit",
+                canonical: "git.commit",
+            }),
+        ).toBe("decision('git.commit', [], Decision, Reason).");
+    });
 
-  it("applies allow, deny precedence, and default deny", async () => {
-    await expect(evaluatePolicy({ allow: ["git.commit"], deny: [] }, "git.commit"))
-      .resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
-    await expect(evaluatePolicy({ allow: [], deny: ["git.push"] }, "git.push"))
-      .resolves.toEqual({ decision: "DENY", reason: "matched deny rule" });
-    await expect(evaluatePolicy({ allow: ["git.push"], deny: ["git.push"] }, "git.push"))
-      .resolves.toEqual({ decision: "DENY", reason: "matched deny rule" });
-    await expect(evaluatePolicy({ allow: [], deny: [] }, "git.status"))
-      .resolves.toEqual({ decision: "DENY", reason: "no matching allow rule" });
-  });
+    it("applies allow, deny precedence, and default deny", async () => {
+        await expect(
+            evaluatePolicy(
+                { allow: { "git.commit": true }, deny: {} },
+                "git.commit",
+            ),
+        ).resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
+        await expect(
+            evaluatePolicy(
+                { allow: {}, deny: { "git.push": true } },
+                "git.push",
+            ),
+        ).resolves.toEqual({ decision: "DENY", reason: "matched deny rule" });
+        await expect(
+            evaluatePolicy(
+                { allow: { "git.push": true }, deny: { "git.push": true } },
+                "git.push",
+            ),
+        ).resolves.toEqual({ decision: "DENY", reason: "matched deny rule" });
+        await expect(
+            evaluatePolicy({ allow: {}, deny: {} }, "git.status"),
+        ).resolves.toEqual({
+            decision: "DENY",
+            reason: "no matching allow rule",
+        });
+    });
 
-  it("allows gh pr view in the example policy", async () => {
-    const source = await readFile(new URL("../../examples/policy.yaml", import.meta.url), "utf8");
-    const policy = parsePolicy(source);
-    const command = normalizeGh(["pr", "view", "42"]);
+    it("evaluates multiple capabilities with one Prolog session", async () => {
+        const engine = new PolicyEngine(
+            compilePolicy({
+                allow: { "git.commit": true },
+                deny: { "git.push": true },
+            }),
+        );
 
-    await expect(evaluatePolicy(policy, command.canonical))
-      .resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
-  });
+        await expect(
+            engine.evaluate({
+                service: "git",
+                action: "commit",
+                canonical: "git.commit",
+            }),
+        ).resolves.toEqual({
+            decision: "ALLOW",
+            reason: "matched allow rule",
+        });
+        await expect(
+            engine.evaluate({
+                service: "git",
+                action: "push",
+                canonical: "git.push",
+            }),
+        ).resolves.toEqual({
+            decision: "DENY",
+            reason: "matched deny rule",
+        });
+    });
 
-  it("allows configured git commands in the example policy", async () => {
-    const source = await readFile(new URL("../../examples/policy.yaml", import.meta.url), "utf8");
-    const policy = parsePolicy(source);
-    const commands = [
-      normalizeGit(["remote", "-v"]),
-      normalizeGit(["config", "--get", "remote.origin.url"]),
-      normalizeGit(["symbolic-ref", "--short", "HEAD"]),
-    ];
+    it("enforces repository constraints", async () => {
+        const policy = {
+            allow: {
+                "github.pr.merge": { repos: ["owner/repo"] },
+            },
+            deny: {},
+        };
 
-    for (const command of commands) {
-      await expect(evaluatePolicy(policy, command.canonical))
-        .resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
-    }
-  });
+        await expect(
+            evaluatePolicy(policy, {
+                service: "github",
+                action: "merge",
+                canonical: "github.pr.merge",
+                constraints: { repository: "owner/repo" },
+            }),
+        ).resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
+        await expect(
+            evaluatePolicy(policy, {
+                service: "github",
+                action: "merge",
+                canonical: "github.pr.merge",
+                constraints: { repository: "other/repo" },
+            }),
+        ).resolves.toEqual({
+            decision: "DENY",
+            reason: "no matching allow rule",
+        });
+    });
+
+    it("requires every Git path constraint to match the policy", async () => {
+        const policy = {
+            allow: {
+                "git.commit": { paths: ["src/policy.ts"] },
+            },
+            deny: {},
+        };
+
+        await expect(
+            evaluatePolicy(policy, {
+                service: "git",
+                action: "commit",
+                canonical: "git.commit",
+                constraints: { paths: ["src/policy.ts"] },
+            }),
+        ).resolves.toEqual({ decision: "ALLOW", reason: "matched allow rule" });
+        await expect(
+            evaluatePolicy(policy, {
+                service: "git",
+                action: "commit",
+                canonical: "git.commit",
+                constraints: { paths: ["src/policy.ts", "README.md"] },
+            }),
+        ).resolves.toEqual({
+            decision: "DENY",
+            reason: "no matching allow rule",
+        });
+    });
+
+    it("allows gh pr view in the example policy", async () => {
+        const source = await readFile(
+            new URL("../../examples/policy.yaml", import.meta.url),
+            "utf8",
+        );
+        const policy = parsePolicy(source);
+
+        await expect(evaluatePolicy(policy, "github.pr.view")).resolves.toEqual(
+            { decision: "ALLOW", reason: "matched allow rule" },
+        );
+    });
+
+    it("allows configured git commands in the example policy", async () => {
+        const source = await readFile(
+            new URL("../../examples/policy.yaml", import.meta.url),
+            "utf8",
+        );
+        const policy = parsePolicy(source);
+        const capabilities = ["git.remote", "git.config", "git.symbolic-ref"];
+
+        for (const capability of capabilities) {
+            await expect(evaluatePolicy(policy, capability)).resolves.toEqual({
+                decision: "ALLOW",
+                reason: "matched allow rule",
+            });
+        }
+    });
 });

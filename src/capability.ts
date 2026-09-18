@@ -1,20 +1,53 @@
-export interface CanonicalCapability {
-  service: "git" | "github";
-  resource?: string;
-  action: string;
-  canonical: string;
+export interface ConstraintMap {
+    git: {
+        paths?: string[];
+        branches?: string[];
+    };
+    github: {
+        repository?: string;
+        pullRequest?: number;
+    };
 }
+
+export type CapabilityService = keyof ConstraintMap;
+
+export type CanonicalCapability<
+    Service extends CapabilityService = CapabilityService,
+> = {
+    [Key in Service]: {
+        service: Key;
+        action: string;
+        canonical: string;
+        constraints?: ConstraintMap[Key];
+    };
+}[Service];
 
 export function normalizeSegment(value: string): string {
-  const segment = value.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
-  return segment || "unknown";
+    const segment = value
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    return segment || "unknown";
 }
 
-export function capability(service: CanonicalCapability["service"], action: string, resource?: string): CanonicalCapability {
-  const normalizedAction = normalizeSegment(action);
-  const normalizedResource = resource === undefined ? undefined : normalizeSegment(resource);
-  const canonical = normalizedResource ? `${service}.${normalizedResource}.${normalizedAction}` : `${service}.${normalizedAction}`;
-  return normalizedResource
-    ? { service, resource: normalizedResource, action: normalizedAction, canonical }
-    : { service, action: normalizedAction, canonical };
+export function capability<Service extends CapabilityService>(
+    service: Service,
+    action: string,
+    segment?: string,
+): CanonicalCapability<Service> {
+    const normalizedAction = normalizeSegment(action);
+    const normalizedSegment =
+        segment === undefined ? undefined : normalizeSegment(segment);
+    const canonical = normalizedSegment
+        ? `${service}.${normalizedSegment}.${normalizedAction}`
+        : `${service}.${normalizedAction}`;
+    return (
+        normalizedSegment
+            ? {
+                  service,
+                  action: normalizedAction,
+                  canonical,
+              }
+            : { service, action: normalizedAction, canonical }
+    ) as CanonicalCapability<Service>;
 }

@@ -1,48 +1,150 @@
 import pl from "tau-prolog";
-import type { Policy } from "./schema.js";
+import type { CanonicalCapability } from "../capability.js";
+import type { CapabilityKey, Policy, PolicyRules } from "./schema.js";
 import { compilePolicy, escapePrologAtom } from "./compiler.js";
 
 export interface PolicyDecision {
-  decision: "ALLOW" | "DENY";
-  reason: string;
+    decision: "ALLOW" | "DENY";
+    reason: string;
 }
 
 export class PolicyEngineError extends Error {}
 
-export function buildDecisionGoal(canonical: string): string {
-  return `decision('${escapePrologAtom(canonical)}', Decision).`;
+type Session = ReturnType<typeof pl.create>;
+
+function constraintTerms(capability: CanonicalCapability): string {
+    const constraints =
+        capability.service === "github"
+            ? capability.constraints?.repository
+                ? [
+                      `constraint(repos, '${escapePrologAtom(capability.constraints.repository)}')`,
+                  ]
+                : []
+            : [
+                  ...(capability.constraints?.paths ?? []).map(
+                      (path) =>
+                          `constraint(paths, '${escapePrologAtom(path)}')`,
+                  ),
+                  ...(capability.constraints?.branches ?? []).map(
+                      (branch) =>
+                          `constraint(branches, '${escapePrologAtom(branch)}')`,
+                  ),
+              ];
+    return `[${constraints.join(", ")}]`;
 }
 
-function runSession(program: string, goal: string): Promise<"ALLOW" | "DENY"> {
-  return new Promise((resolve, reject) => {
-    const session = pl.create(1000);
-    session.consult(program, {
-      success: () => session.query(goal, {
-        success: () => session.answer({
-          success: (answer) => {
-            const formatted = session.format_answer(answer);
-            const match = formatted.match(/Decision = (allow|deny)/);
-            if (!match) {
-              reject(new PolicyEngineError(`Unexpected Prolog answer: ${formatted}`));
-              return;
-            }
-            resolve(match[1] === "allow" ? "ALLOW" : "DENY");
-          },
-          fail: () => reject(new PolicyEngineError("Prolog returned no decision")),
-          error: (error) => reject(new PolicyEngineError(String(error))),
-          limit: () => reject(new PolicyEngineError("Prolog inference limit exceeded")),
-        }),
-        error: (error) => reject(new PolicyEngineError(String(error))),
-      }),
-      error: (error) => reject(new PolicyEngineError(String(error))),
+export function buildDecisionGoal(capability: CanonicalCapability): string {
+    return `decision('${escapePrologAtom(capability.canonical)}', ${constraintTerms(capability)}, Decision, Reason).`;
+}
+
+function consult(session: Session, program: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        session.consult(program, {
+            success: () => resolve(),
+            error: (error) => reject(new PolicyEngineError(String(error))),
+        });
     });
-  });
 }
 
-export async function evaluatePolicy(policy: Policy, canonical: string): Promise<PolicyDecision> {
-  const program = compilePolicy(policy);
-  const decision = await runSession(program, buildDecisionGoal(canonical));
-  if (decision === "ALLOW") return { decision, reason: "matched allow rule" };
-  if (policy.deny.includes(canonical)) return { decision: "DENY", reason: "matched deny rule" };
-  return { decision: "DENY", reason: "no matching allow rule" };
+function query(session: Session, goal: string): Promise<PolicyDecision> {
+    return new Promise((resolve, reject) => {
+        session.query(goal, {
+            success: () =>
+                session.answer({
+                    success: (answer) => {
+                        const formatted = session.format_answer(answer);
+                        const match = formatted.match(
+                            /Decision = (allow|deny), Reason = (.+)$/,
+                        );
+                        if (!match) {
+                            reject(
+                                new PolicyEngineError(
+                                    `Unexpected Prolog answer: ${formatted}`,
+                                ),
+                            );
+                            return;
+                        }
+                        resolve({
+                            decision: match[1] === "allow" ? "ALLOW" : "DENY",
+                            reason: match[2]!.trim(),
+                        });
+                    },
+                    fail: () =>
+                        reject(
+                            new PolicyEngineError(
+                                "Prolog returned no decision",
+                            ),
+                        ),
+                    error: (error) =>
+                        reject(new PolicyEngineError(String(error))),
+                    limit: () =>
+                        reject(
+                            new PolicyEngineError(
+                                "Prolog inference limit exceeded",
+                            ),
+                        ),
+                }),
+            error: (error) => reject(new PolicyEngineError(String(error))),
+        });
+    });
+}
+
+export class PolicyEngine {
+    private readonly session = pl.create(1000);
+    private readonly ready: Promise<void>;
+
+    constructor(compiledFacts: string) {
+        this.ready = consult(this.session, compiledFacts);
+    }
+
+    async evaluate(capability: CanonicalCapability): Promise<PolicyDecision> {
+        await this.ready;
+        return query(this.session, buildDecisionGoal(capability));
+    }
+}
+
+export function evaluatePolicy(
+    policy: Policy,
+    capability: CanonicalCapability | string,
+): Promise<PolicyDecision> {
+    const normalized =
+        typeof capability === "string"
+            ? {
+                  service: "git" as const,
+                  action: "unknown",
+                  canonical: capability,
+              }
+            : capability;
+    return new PolicyEngine(compilePolicy(policy)).evaluate(normalized);
+}
+
+export async function evaluatePolicies(
+    globalPolicy: Policy,
+    directoryPolicies: Policy[],
+    capability: CanonicalCapability,
+): Promise<PolicyDecision> {
+    const globalDecision = await evaluatePolicy(globalPolicy, capability);
+    if (globalDecision.decision === "DENY") return globalDecision;
+
+    const key = capability.canonical as CapabilityKey;
+    for (const policy of directoryPolicies) {
+        if (policy.deny[key] !== undefined) {
+            const decision = await evaluatePolicy(
+                {
+                    allow: { [key]: true } as PolicyRules,
+                    deny: policy.deny,
+                },
+                capability,
+            );
+            if (decision.decision === "DENY") return decision;
+        }
+        if (policy.allow[key] !== undefined) {
+            const decision = await evaluatePolicy(
+                { allow: policy.allow, deny: {} },
+                capability,
+            );
+            if (decision.decision === "DENY") return decision;
+        }
+    }
+    return globalDecision;
 }
